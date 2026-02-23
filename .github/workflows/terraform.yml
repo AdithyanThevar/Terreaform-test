@@ -1,10 +1,23 @@
 name: Terraform Pipeline
 
 on:
-  push:
-    branches:
-      - dev
-      - main
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Select Environment"
+        required: true
+        type: choice
+        options:
+          - dev
+          - prod
+      action:
+        description: "Select Terraform Action"
+        required: true
+        type: choice
+        options:
+          - plan
+          - apply
+          - destroy
 
 jobs:
   terraform:
@@ -16,9 +29,9 @@ jobs:
 
     env:
       AWS_REGION: ap-south-1
+      TF_DIR: envs/${{ github.event.inputs.environment }}
 
     steps:
-
       - name: Checkout Code
         uses: actions/checkout@v4
 
@@ -32,14 +45,17 @@ jobs:
         uses: hashicorp/setup-terraform@v3
 
       - name: Terraform Init
-        run: terraform init
+        run: terraform -chdir=${{ env.TF_DIR }} init
 
       - name: Terraform Validate
-        run: terraform validate
+        run: terraform -chdir=${{ env.TF_DIR }} validate
 
-      - name: Terraform Plan
-        run: terraform plan -out=tfplan
-
-      - name: Terraform Apply (only main branch)
-        if: github.ref == 'refs/heads/main'
-        run: terraform apply -auto-approve tfplan
+      - name: Terraform Plan / Apply / Destroy
+        run: |
+          if [ "${{ github.event.inputs.action }}" == "destroy" ]; then
+            terraform -chdir=${{ env.TF_DIR }} destroy -auto-approve
+          elif [ "${{ github.event.inputs.action }}" == "apply" ]; then
+            terraform -chdir=${{ env.TF_DIR }} apply -auto-approve
+          else
+            terraform -chdir=${{ env.TF_DIR }} plan
+          fi
